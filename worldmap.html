@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<head>
+  <title></title>
+  <meta charset="utf-8">
+  <script src="https://d3js.org/d3.v4.min.js" charset="utf-8"></script>
+  <script src="https://d3js.org/topojson.v2.min.js"></script>
+  <script src="https://d3js.org/d3-array.v1.min.js"></script>
+  <script src="https://d3js.org/d3-geo.v1.min.js"></script>
+  <script src="https://d3js.org/d3-geo-projection.v1.min.js"></script>
+  <script
+  src="https://code.jquery.com/jquery-3.4.1.slim.min.js"
+  integrity="sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8="
+  crossorigin="anonymous"></script>
+<style>
+.drop{
+  z-index: 1;
+}
+.link {
+  stroke: rgba(237, 231, 216,0);
+  /* stroke: black; */
+  /* stroke-dasharray: 7,5; */
+  fill: none;
+}
+
+.danger{
+  stroke: green;
+  fill: none;
+  stroke-dasharray: 7,5;
+}
+
+.nodanger{
+  stroke: green;
+  fill: none;
+}
+.node {
+  cursor: move;
+  fill: #ccc;
+  stroke: #000;
+  stroke-width: 1.5px;
+}
+
+div.tooltip {	
+    position: absolute;			
+    text-align: center;			
+    min-width: 60px;					
+    height: 23px;					
+    padding: 2px;				
+    font: 12px sans-serif;		
+    background: lightsteelblue;	
+    border: 0px;		
+    border-radius: 8px;			
+    pointer-events: none;			
+}
+.dot {
+  height: 10px;
+  width: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.svgclass{
+  display: inline-block;
+}
+</style>
+</head>
+<body>
+
+  <div style="display: inline-block; float: left;">
+    <span>LEGEND</span>
+    <br>
+    <br>
+    <span class="dot" style="background-color: blue;"></span> &nbsp; &nbsp; <span>Port</span>
+    <br>
+    <span class="dot" style="background-color: brown;"></span> &nbsp; &nbsp; <span>Source</span>
+    <br>
+    <span class="dot" style="background-color: cyan;"></span> &nbsp; &nbsp; <span>Destination</span>
+    <br>
+    <hr style="border-color:green; width: 10px; margin-left: 0;margin-right: 0; display: inline-block;"> &nbsp; &nbsp; <span>Links</span>
+    <br>
+    <hr style="border-color:green; width: 10px; margin-left: 0;margin-right: 0; display: inline-block; border-style: dashed;"> &nbsp; &nbsp; <span>In Danger</span>
+    <br>
+    <br>
+    <input type="button" value="Remove" id="r1">
+    <br>
+    <br>
+    <input type="button" value="Update" id="u1" style="display: none;">
+
+  </div>
+
+  <input onclick="main()" type="button" value="Single Select" id="b1" style="float: left;"/>
+    
+  <!-- <input onclick="main()" type="button" value="Single Select" id="b1"></input> -->
+  <!-- <select id="d3-dropdown">
+    <option value="All">All</option>
+    <option value="Port">Ports</option>
+    <option value="Source">Sources</option>
+    <option value="Destination">Destinations</option>
+    <option value="Port Source">Ports & Sources</option>
+    <option value="Source Destination">Sources & Destinations</option>
+    <option value="Port Destination">Ports & Destinations</option> --> 
+
+  </select>
+
+  <script>
+var margin = {top: 5, bottom: 5, left: 5, right: 5};
+var width = 1000; //1300
+var height = 640;
+var widthScat = width - margin.left - margin.right;
+var heightScat = height - margin.top - margin.bottom;
+
+
+
+var g = d3.select('body').append('svg')
+    .attr('width', width)
+    .attr('height', height)
+    .attr("class","svgclass")
+    .append('g')
+    .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')')
+    .attr('width', widthScat)
+    .attr('height', heightScat);
+
+
+
+
+
+var div = d3.select("body").append("div")	
+    .attr("class", "tooltip")				
+    .style("opacity", 0);
+
+
+
+var link,node;
+
+
+d3.json('countries.json', function(error, data) {
+
+
+ d3.csv('links2.csv', d3.autoType,function (data1) {
+
+
+ d3.csv('nodes2.csv', d3.autoType,function (data2) {
+
+  main();
+
+  // d3.select("select")
+  // .on("change",change);
+
+  // function change(){
+  //   var selected = d3.select("#d3-dropdown").node().value;
+  //   if(selected=="All")
+  //   main(selected);
+  //   else if(selected=="Port" || selected=="Source" || selected=="Destination")
+  //   dispselected(selected);
+  //   else
+  //   dispselected1(selected);
+  // }
+
+  d3.select("#b1")
+  .on("click",main);
+
+  d3.select("#r1")
+  .on("click",remove);
+
+  function main(){
+    // var all=z;
+    // if(all=="All"){
+    //   document.getElementById("b1").value="Toggle";
+    //   toggle();
+    // }
+    var selected =document.getElementById("b1").value;
+    if(selected=="Single Select"){
+      document.getElementById("b1").value="Multiple Select";
+      // document.getElementById("d3-dropdown").value="All";
+      toggle();
+    }
+    else{
+      document.getElementById("b1").value="Single Select";
+      // document.getElementById("d3-dropdown").value="All";
+      untoggle();
+    }
+    }
+
+
+function remove(){
+  var val =document.getElementById("b1").value;
+  if(val=="Multiple Select")
+  document.getElementById("b1").value="Single Select";
+  else
+  document.getElementById("b1").value="Multiple Select";
+
+  g.selectAll("*").remove();
+
+  var projection = d3.geoMercator().fitSize([width,height],data);
+// geoCylindricalStereographic();
+var geoPath = d3.geoPath(projection);
+
+  console.log(data);
+
+  g.selectAll('path')
+    .data(data.features)
+    .enter().append('path')
+    .attr('fill', '#ccc')
+    .attr('d', geoPath)
+    .attr('id', function(d) {
+      return d.properties.name;
+    })
+    .on('mouseover', onMouseOver)
+    .on('mouseout', onMouseOut);
+
+    function onMouseOver(d) {
+  g.select('#' + d.properties.name)
+    .style('fill', '#3B5998');
+}
+
+function onMouseOut(d) {
+  g.select('#' + d.properties .name)
+    .style('fill', '#ccc');
+}
+
+  delete(link);
+  delete(node);
+
+  var link = g.selectAll(".link"),
+    node = g.selectAll(".node");
+
+
+node = node.data(data2)
+    .enter().append("circle")
+      .attr("class", "node")
+      .style("fill","#ccc")
+      .attr("r", 3)
+      .attr("transform", function(d) {
+							return "translate(" + projection([
+							  d.Longitude,
+							  d.Latitude
+							]) + ")";
+						  })
+      .on("mouseover", function(d) {		
+            div.transition()		
+                .duration(200)		
+                .style("opacity", .9);		
+            div	.html(d.Name)	
+                .style("left", (d3.event.pageX) + "px")		
+                .style("top", (d3.event.pageY - 28) + "px");	
+            })					
+        .on("mouseout", function(d) {		
+            div.transition()		
+                .duration(500)		
+                .style("opacity", 0);	
+        })
+        .on("click",clickednode);
+      // .attr("cx", function(d){ return projection(d.lat);})
+      // .attr("cy", function(d){ return projection(d.long);});
+
+  
+ 
+  // .append("line")
+  //   .attr("x1", function(d){ return projection([d.x1]);})
+  //   .attr("y1", function(d){ return projection([d.y1]);})
+  //   .attr("x2", function(d){ return projection([d.x2]);})
+  //   .attr("y2", function(d){ return projection([d.y2]); })
+  //   .attr("stroke-width", function(d){return d.routes/5})
+  //   .attr("class","link");
+
+  var count=0;
+
+  function clickednode(d){
+    // d3.selectAll(".node").style("fill","#ccc");
+    // d3.selectAll(".link").style("stroke","rgba(237, 231, 216,1)");
+    var colour= d3.select(this).style("fill");
+    console.log(colour);
+// console.log(previousElement.attr("style"));
+// var colour = d3.rgb(previousElement.attr("style"));
+// if(colour.r == 0 && colour.g == 0 && colour.b == 255) {
+//   d3.select(this).style("fill","#ccc");
+if(colour=="rgb(204, 204, 204)"){
+  if(d.Type=="Port"){
+    d3.select(this)
+    .style("fill","blue");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Destination"){
+      d3.select(this)
+    .style("fill","cyan");
+    }
+    
+    d.remove="yes";
+    count+=1;
+    d3.select("#u1")
+  .style("display","inline-block");
+  console.log(d.remove);
+
+    
+}
+else{
+  d3.select(this).style("fill","#ccc");
+  thisNode=d;
+  
+  d.remove="no";
+  count-=1;
+  if(count==0)
+  {
+    d3.select("#u1")
+  .style("display","none");
+  }
+
+}
+    
+}
+
+}
+
+function toggle(){
+
+g.selectAll("*").remove();
+  var projection = d3.geoMercator().fitSize([width,height],data);
+// geoCylindricalStereographic();
+var geoPath = d3.geoPath().pointRadius(5).projection(projection);
+
+  //console.log(data);
+
+  g.selectAll('path')
+    .data(data.features)
+    .enter().append('path')
+    .attr('fill', '#ccc')
+    .attr('d', geoPath)
+    .attr('id', function(d) {
+      return d.properties.name;
+    })
+    .on('mouseover', onMouseOver)
+    .on('mouseout', onMouseOut);
+
+    function onMouseOver(d) {
+  g.select('#' + d.properties.name)
+    .style('fill', '#3B5998');
+}
+
+function onMouseOut(d) {
+  g.select('#' + d.properties .name)
+    .style('fill', '#ccc');
+}
+
+link = g.selectAll(".link");
+node = g.selectAll(".node");
+
+var filtered=data2.filter(function(d){
+  if(d.Type=="Port"){
+    return d;
+  }
+})
+
+console.log(filtered);
+
+// link=link.data(data1)
+//   .enter()
+//   .append('path')
+// 					.attr('d', function (d) {
+// 						var coordDepart = [ d.x1, d.y1 ];
+// 						var coordArrivee = [ d.x2, d.y2 ];
+// 						return geoPath({
+// 							type: 'LineString',
+// 							coordinates: [
+// 								coordDepart,
+// 								coordArrivee
+// 							]
+// 						});
+// 					})
+//           .attr("stroke-width", function(d){return d.routes*5})
+//           .attr("class","link")
+//           .on("click",clickedlink);
+
+
+link=link.data(data1)
+  .enter()
+  .append("line")
+    .attr("x1", function(d){ var cor=projection([d.start_long,d.start_lat]);
+                return cor[0];
+                
+                })
+    .attr("y1", function(d){ var cor=projection([d.start_long,d.start_lat]);
+                return cor[1];})
+    .attr("x2", function(d){var cor=projection([d.end_long,d.end_lat]);
+                return cor[0];})
+    .attr("y2", function(d){var cor=projection([d.end_long,d.end_lat]);
+                console.log(d.end_long);
+                return cor[1]; })
+    .attr("stroke-width", function(d){return d.cost*5})
+    .attr("class","link")
+    .on("click",clickedlink);
+
+node = node.data(data2)
+    .enter().append("circle")
+      .attr("class", "node")
+      .attr("r", 3)
+      .attr("transform", function(d) {
+							return "translate(" + projection([
+							  d.Longitude,
+							  d.Latitude
+							]) + ")";
+						  })
+      .on("mouseover", function(d) {		
+            div.transition()		
+                .duration(200)		
+                .style("opacity", .9);		
+            div	.html(d.Name)	
+                .style("left", (d3.event.pageX) + "px")		
+                .style("top", (d3.event.pageY - 28) + "px");	
+            })					
+        .on("mouseout", function(d) {		
+            div.transition()		
+                .duration(500)		
+                .style("opacity", 0);	
+        })
+        .on("click",clickednode)
+        .on("dblclick",dbl);
+
+    
+
+      // .attr("cx", function(d){ return projection(d.lat);})
+      // .attr("cy", function(d){ return projection(d.long);});
+
+  
+ 
+  // .append("line")
+  //   .attr("x1", function(d){ return projection([d.x1]);})
+  //   .attr("y1", function(d){ return projection([d.y1]);})
+  //   .attr("x2", function(d){ return projection([d.x2]);})
+  //   .attr("y2", function(d){ return projection([d.y2]); })
+  //   .attr("stroke-width", function(d){return d.routes/5})
+  //   .attr("class","link");
+
+  function clickednode(d){
+    // d3.selectAll(".node").style("fill","#ccc");
+    // d3.selectAll(".link").style("stroke","rgba(237, 231, 216,0)");
+
+    var colour= d3.select(this).style("fill");
+    console.log(colour);
+if(colour=="rgb(204, 204, 204)"){
+  d3.selectAll(".node").style("fill","#ccc");
+  if(d.Type=="Port"){
+    d3.select(this)
+    .style("fill","blue");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Destination"){
+      d3.select(this)
+    .style("fill","cyan");
+    }
+    thisNode=d;
+
+    d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start!= thisNode.Name) || (d.end!=thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","rgba(237, 231, 216,0)");
+
+
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","green");
+}
+else{
+  d3.select(this).style("fill","#ccc");
+  thisNode=d;
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","rgba(237, 231, 216,0)");
+
+}
+
+
+
+  //   if(d.Type=="Port"){
+  //   d3.select(this)
+  //   .style("fill","blue");
+  //   }
+  //   else if(d.Type=="Source"){
+  //     d3.select(this)
+  //   .style("fill","brown");
+  //   }
+  //   else if(d.Type=="Source"){
+  //     d3.select(this)
+  //   .style("fill","brown");
+  //   }
+  //   else if(d.Type=="Destination"){
+  //     d3.select(this)
+  //   .style("fill","cyan");
+  //   }
+  //   thisNode=d;
+  // d3.selectAll(".link")
+  // .filter(function(d){
+  //     return (d.source=== thisNode.Name) || (d.target===thisNode.Name);
+  // })
+  // //.style("display","inline")
+  // .style("stroke","green");
+}
+
+function clickedlink(d){
+
+d3.selectAll(".link").style("stroke","rgba(237, 231, 216,0)");
+d3.selectAll(".node").style("fill","#ccc");
+d3.select(this).style("display","inline").style("stroke","blue");
+thisNode=d;
+d3.selectAll(".node")
+.filter(function(e){
+  return (e.Name=== thisNode.start) || (e.Name===thisNode.end);
+})
+.style("fill","red");
+}
+
+function dbl(d){
+    d3.selectAll(".node").style("fill","#ccc");
+    d3.selectAll(".link").attr("stroke","rgba(237, 231, 216,0)");
+    if(d.Type=="Port"){
+    d3.select(this)
+    .style("fill","blue");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Destination"){
+      d3.select(this)
+    .style("fill","cyan");
+    }
+    thisNode=d;
+    if(thisNode.danger=="no"){
+      thisNode.danger="yes";
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","green")
+  .style("stroke-dasharray","7,5");
+    }
+  else{
+    thisNode.danger="no";
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","green")
+  .style("stroke-dasharray","0,0");
+
+  }
+}
+}
+
+
+function untoggle(){
+
+  g.selectAll("*").remove();
+
+  var projection = d3.geoMercator().fitSize([width,height],data);
+// geoCylindricalStereographic();
+var geoPath = d3.geoPath(projection);
+
+  console.log(data);
+
+  g.selectAll('path')
+    .data(data.features)
+    .enter().append('path')
+    .attr('fill', '#ccc')
+    .attr('d', geoPath)
+    .attr('id', function(d) {
+      return d.properties.name;
+    })
+    .on('mouseover', onMouseOver)
+    .on('mouseout', onMouseOut);
+
+    function onMouseOver(d) {
+  g.select('#' + d.properties.name)
+    .style('fill', '#3B5998');
+}
+
+function onMouseOut(d) {
+  g.select('#' + d.properties .name)
+    .style('fill', '#ccc');
+}
+
+  console.log("hgvhgcvhg");
+  delete(link);
+  delete(node);
+
+  var link = g.selectAll(".link"),
+    node = g.selectAll(".node");
+
+  // link=link.data(data1)
+  // .enter()
+  // .append('path')
+	// 				.attr('d', function (d) {
+	// 					var coordDepart = [ d.x1, d.y1 ];
+	// 					var coordArrivee = [ d.x2, d.y2 ];
+	// 					return geoPath({
+	// 						type: 'LineString',
+	// 						coordinates: [
+	// 							coordDepart,
+	// 							coordArrivee
+	// 						]
+	// 					});
+	// 				})
+  //         .attr("stroke-width", function(d){return d.routes*5})
+  //         .attr("class","link")
+  //         .on("click",clickedlink);
+
+  link=link.data(data1)
+  .enter()
+  .append("line")
+    .attr("x1", function(d){ var cor=projection([d.start_long,d.start_lat]);
+                return cor[0];
+                
+                })
+    .attr("y1", function(d){ var cor=projection([d.start_long,d.start_lat]);
+                return cor[1];})
+    .attr("x2", function(d){var cor=projection([d.end_long,d.end_lat]);
+                return cor[0];})
+    .attr("y2", function(d){var cor=projection([d.end_long,d.end_lat]);
+                return cor[1]; })
+    .attr("stroke-width", function(d){return d.cost*5})
+    .attr("class","link")
+    .on("click",clickedlink);
+
+
+node = node.data(data2)
+    .enter().append("circle")
+      .attr("class", "node")
+      .style("fill","#ccc")
+      .attr("r", 3)
+      .attr("transform", function(d) {
+							return "translate(" + projection([
+							  d.Longitude,
+							  d.Latitude
+							]) + ")";
+						  })
+      .on("mouseover", function(d) {		
+            div.transition()		
+                .duration(200)		
+                .style("opacity", .9);		
+            div	.html(d.Name)	
+                .style("left", (d3.event.pageX) + "px")		
+                .style("top", (d3.event.pageY - 28) + "px");	
+            })					
+        .on("mouseout", function(d) {		
+            div.transition()		
+                .duration(500)		
+                .style("opacity", 0);	
+        })
+        .on("click",clickednode)
+        .on("dblclick",dbl);
+      // .attr("cx", function(d){ return projection(d.lat);})
+      // .attr("cy", function(d){ return projection(d.long);});
+
+  
+ 
+  // .append("line")
+  //   .attr("x1", function(d){ return projection([d.x1]);})
+  //   .attr("y1", function(d){ return projection([d.y1]);})
+  //   .attr("x2", function(d){ return projection([d.x2]);})
+  //   .attr("y2", function(d){ return projection([d.y2]); })
+  //   .attr("stroke-width", function(d){return d.routes/5})
+  //   .attr("class","link");
+
+  function clickednode(d){
+    // d3.selectAll(".node").style("fill","#ccc");
+    // d3.selectAll(".link").style("stroke","rgba(237, 231, 216,1)");
+    var colour= d3.select(this).style("fill");
+    console.log(colour);
+// console.log(previousElement.attr("style"));
+// var colour = d3.rgb(previousElement.attr("style"));
+// if(colour.r == 0 && colour.g == 0 && colour.b == 255) {
+//   d3.select(this).style("fill","#ccc");
+if(colour=="rgb(204, 204, 204)"){
+  if(d.Type=="Port"){
+    d3.select(this)
+    .style("fill","blue");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Destination"){
+      d3.select(this)
+    .style("fill","cyan");
+    }
+    thisNode=d;
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","yellow");
+}
+else{
+  d3.select(this).style("fill","#ccc");
+  thisNode=d;
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","rgba(237, 231, 216,0)");
+
+}
+    
+}
+
+function clickedlink(d){
+
+// d3.selectAll(".link").style("stroke","rgba(237, 231, 216,0)");
+// d3.selectAll(".node").style("fill","#ccc");
+d3.select(this).style("display","inline").style("stroke","blue");
+thisNode=d;
+d3.selectAll(".node")
+.filter(function(e){
+  return (e.Name=== thisNode.start) || (e.Name===thisNode.end);
+})
+.style("fill","red");
+}
+
+function dbl(d){
+    // d3.selectAll(".node").style("fill","#ccc");
+    // d3.selectAll(".link").attr("stroke","rgba(237, 231, 216,0)");
+    if(d.Type=="Port"){
+    d3.select(this)
+    .style("fill","blue");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Source"){
+      d3.select(this)
+    .style("fill","brown");
+    }
+    else if(d.Type=="Destination"){
+      d3.select(this)
+    .style("fill","cyan");
+    }
+    thisNode=d;
+    if(thisNode.danger=="no"){
+      thisNode.danger="yes";
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","yellow")
+  .style("stroke-dasharray","7,5");
+    }
+  else{
+    thisNode.danger="no";
+  d3.selectAll(".link")
+  .filter(function(d){
+      return (d.start=== thisNode.Name) || (d.end===thisNode.Name);
+  })
+  //.style("display","inline")
+  .style("stroke","yellow")
+  .style("stroke-dasharray","0,0");
+
+  }
+}
+
+}
+
+// function dispselected(z){
+//   var x=z;
+//   console.log(x);
+
+//   g.selectAll("*").remove();
+//   var projection = d3.geoMercator().fitSize([width,height],data);
+// // geoCylindricalStereographic();
+// var geoPath = d3.geoPath().pointRadius(5).projection(projection);
+
+//   //console.log(data);
+
+//   g.selectAll('path')
+//     .data(data.features)
+//     .enter().append('path')
+//     .attr('fill', '#ccc')
+//     .attr('d', geoPath)
+//     .attr('id', function(d) {
+//       return d.properties.name;
+//     })
+//     .on('mouseover', onMouseOver)
+//     .on('mouseout', onMouseOut);
+
+//     function onMouseOver(d) {
+//   g.select('#' + d.properties.name)
+//     .style('fill', '#3B5998');
+// }
+
+// function onMouseOut(d) {
+//   g.select('#' + d.properties .name)
+//     .style('fill', '#ccc');
+// }
+
+// link = g.selectAll(".link");
+// node = g.selectAll(".node");
+
+// var filtered=data2.filter(function(d){
+//   if(d.Type==x){
+//     return d;
+//   }
+// })
+
+// link=link.data(data1)
+//   .enter()
+//   .append('path')
+// 					.attr('d', function (d) {
+// 						var coordDepart = [ d.x1, d.y1 ];
+// 						var coordArrivee = [ d.x2, d.y2 ];
+// 						return geoPath({
+// 							type: 'LineString',
+// 							coordinates: [
+// 								coordDepart,
+// 								coordArrivee
+// 							]
+// 						});
+// 					})
+//           .attr("stroke-width", function(d){return d.routes*5})
+//           .attr("class","link");
+
+// node = node.data(filtered)
+//     .enter().append("circle")
+//       .attr("class", "node")
+//       .attr("r", 3)
+//       .attr("transform", function(d) {
+//         // if(d.Type==x){
+// 							return "translate(" + projection([
+// 							  d.x,
+// 							  d.y
+// 							]) + ")";
+//         // }
+// 						  })
+//       .on("mouseover", function(d) {		
+//             div.transition()		
+//                 .duration(200)		
+//                 .style("opacity", .9);		
+//             div	.html(d.name)	
+//                 .style("left", (d3.event.pageX) + "px")		
+//                 .style("top", (d3.event.pageY - 28) + "px");	
+//             })					
+//         .on("mouseout", function(d) {		
+//             div.transition()		
+//                 .duration(500)		
+//                 .style("opacity", 0);	
+//         })
+//         .on("click",clickednode);
+//         // .on("dblclick",dbl);
+
+
+//         function clickednode(d){
+//     d3.selectAll(".node").style("fill","#ccc");
+//     d3.selectAll(".link").style("stroke","rgba(237, 231, 216,0)");
+//     if(d.Type=="Port"){
+//     d3.select(this)
+//     .style("fill","blue");
+//     }
+//     else if(d.Type=="Source"){
+//       d3.select(this)
+//     .style("fill","brown");
+//     }
+//     else if(d.Type=="Source"){
+//       d3.select(this)
+//     .style("fill","brown");
+//     }
+//     else if(d.Type=="Destination"){
+//       d3.select(this)
+//     .style("fill","cyan");
+//     }
+//     thisNode=d;
+//   d3.selectAll(".link")
+//   .filter(function(d){
+
+  
+//       //return (d.source=== thisNode.name) || (d.target===thisNode.name);
+//       if(d.source=== thisNode.name){
+//         console.log("source");
+//         console.log(d.source);
+//         console.log(thisNode.name);
+//         var targ1=data2.filter(function(e){
+//           if(d.target==e.name){
+//             return e;
+//   }
+// })
+// console.log(targ1);
+// var targ2=targ1[0]["Type"];
+// console.log(targ2);
+//       if(targ2==x){
+//         return d;
+//       }
+//       }
+//       else if(d.target=== thisNode.name){
+//         var source1=data2.filter(function(e){
+//           if(d.source==e.name){
+//             return e;
+//   }
+// })
+// console.log(source1);
+// var source2=source1[0]["Type"];
+// console.log(source2);
+//       if(source2==x){
+//         return d;
+//       }
+//       }
+//   })
+//   //.style("display","inline")
+//   .style("stroke","green");
+// }
+
+// // function dbl(d){
+// //     d3.selectAll(".node").style("fill","#ccc");
+// //     d3.selectAll(".link").attr("stroke","rgba(237, 231, 216,0)");
+// //     if(d.Type=="Port"){
+// //     d3.select(this)
+// //     .style("fill","blue");
+// //     }
+// //     else if(d.Type=="Source"){
+// //       d3.select(this)
+// //     .style("fill","brown");
+// //     }
+// //     else if(d.Type=="Source"){
+// //       d3.select(this)
+// //     .style("fill","brown");
+// //     }
+// //     else if(d.Type=="Destination"){
+// //       d3.select(this)
+// //     .style("fill","cyan");
+// //     }
+// //     thisNode=d;
+// //     if(thisNode.danger=="no"){
+// //       thisNode.danger="yes";
+// //   d3.selectAll(".link")
+// //   .filter(function(d){
+// //       return (d.source=== thisNode.name) || (d.target===thisNode.name);
+// //   })
+// //   //.style("display","inline")
+// //   .style("stroke","green")
+// //   .style("stroke-dasharray","7,5");
+// //     }
+// //   else{
+// //     thisNode.danger="no";
+// //   d3.selectAll(".link")
+// //   .filter(function(d){
+// //       return (d.source=== thisNode.name) || (d.target===thisNode.name);
+// //   })
+// //   //.style("display","inline")
+// //   .style("stroke","green")
+// //   .style("stroke-dasharray","0,0");
+
+// //   }
+// // }
+
+
+// }
+
+// function dispselected1(z){
+//   var vari=z;
+//   var x=vari.split(" ");
+//   var x1=x[0];
+//   var x2=x[1];
+//   g.selectAll("*").remove();
+//   var projection = d3.geoMercator().fitSize([width,height],data);
+// // geoCylindricalStereographic();
+// var geoPath = d3.geoPath().pointRadius(5).projection(projection);
+
+//   //console.log(data);
+
+//   g.selectAll('path')
+//     .data(data.features)
+//     .enter().append('path')
+//     .attr('fill', '#ccc')
+//     .attr('d', geoPath)
+//     .attr('id', function(d) {
+//       return d.properties.name;
+//     })
+//     .on('mouseover', onMouseOver)
+//     .on('mouseout', onMouseOut);
+
+//     function onMouseOver(d) {
+//   g.select('#' + d.properties.name)
+//     .style('fill', '#3B5998');
+// }
+
+// function onMouseOut(d) {
+//   g.select('#' + d.properties .name)
+//     .style('fill', '#ccc');
+// }
+
+// link = g.selectAll(".link");
+// node = g.selectAll(".node");
+
+// var filtered=data2.filter(function(d){
+//   if(d.Type==x1 || d.Type==x2){
+//     return d;
+//   }
+// })
+
+// link=link.data(data1)
+//   .enter()
+//   .append('path')
+// 					.attr('d', function (d) {
+// 						var coordDepart = [ d.x1, d.y1 ];
+// 						var coordArrivee = [ d.x2, d.y2 ];
+// 						return geoPath({
+// 							type: 'LineString',
+// 							coordinates: [
+// 								coordDepart,
+// 								coordArrivee
+// 							]
+// 						});
+// 					})
+//           .attr("stroke-width", function(d){return d.routes*5})
+//           .attr("class","link");
+
+//           node = node.data(filtered)
+//     .enter().append("circle")
+//       .attr("class", "node")
+//       .attr("r", 3)
+//       .attr("transform", function(d) {
+//         // if(d.Type==x){
+// 							return "translate(" + projection([
+// 							  d.x,
+// 							  d.y
+// 							]) + ")";
+//         // }
+// 						  })
+//       .on("mouseover", function(d) {		
+//             div.transition()		
+//                 .duration(200)		
+//                 .style("opacity", .9);		
+//             div	.html(d.name)	
+//                 .style("left", (d3.event.pageX) + "px")		
+//                 .style("top", (d3.event.pageY - 28) + "px");	
+//             })					
+//         .on("mouseout", function(d) {		
+//             div.transition()		
+//                 .duration(500)		
+//                 .style("opacity", 0);	
+//         })
+//         .on("click",clickednode);
+//         // .on("dblclick",dbl);
+
+
+//         function clickednode(d){
+//     d3.selectAll(".node").style("fill","#ccc");
+//     d3.selectAll(".link").style("stroke","rgba(237, 231, 216,0)");
+//     if(d.Type=="Port"){
+//     d3.select(this)
+//     .style("fill","blue");
+//     }
+//     else if(d.Type=="Source"){
+//       d3.select(this)
+//     .style("fill","brown");
+//     }
+//     else if(d.Type=="Source"){
+//       d3.select(this)
+//     .style("fill","brown");
+//     }
+//     else if(d.Type=="Destination"){
+//       d3.select(this)
+//     .style("fill","cyan");
+//     }
+//     thisNode=d;
+//   d3.selectAll(".link")
+//   .filter(function(d){
+
+  
+//       //return (d.source=== thisNode.name) || (d.target===thisNode.name);
+//       if(d.source=== thisNode.name){
+//         console.log("source");
+//         console.log(d.source);
+//         console.log(thisNode.name);
+//         var targ1=data2.filter(function(e){
+//           if(d.target==e.name){
+//             return e;
+//   }
+// })
+// console.log(targ1);
+// var targ2=targ1[0]["Type"];
+// console.log(targ2);
+//       if(targ2==x1 || targ2==x2){
+//         return d;
+//       }
+//       }
+//       else if(d.target=== thisNode.name){
+//         var source1=data2.filter(function(e){
+//           if(d.source==e.name){
+//             return e;
+//   }
+// })
+// console.log(source1);
+// var source2=source1[0]["Type"];
+// console.log(source2);
+//       if(source2==x1 || source2==x2){
+//         return d;
+//       }
+//       }
+//   })
+//   //.style("display","inline")
+//   .style("stroke","green");
+// }
+
+
+  
+// }
+
+
+});
+});
+});
+
+  </script>
+  </body>
